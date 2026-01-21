@@ -13,7 +13,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from prime_cli.api.sandbox import AsyncSandboxClient, CreateSandboxRequest
+from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
 
 
 @dataclass
