@@ -461,6 +461,8 @@ class PromptInjectionEnv(LudicEnv[str, str, str]):
         m_info: Info = {
             "phase": "turn_complete",
             "turn": self._state.current_turn,
+            "agent": "M",
+            "m_reward": turn_rewards.m_reward,
             "injected": turn_rewards.injected,
             "detected": turn_rewards.detected,
             "injection_success": turn_rewards.success,
@@ -471,6 +473,8 @@ class PromptInjectionEnv(LudicEnv[str, str, str]):
         d_info: Info = {
             "phase": "turn_complete",
             "turn": self._state.current_turn,
+            "agent": "D",
+            "d_reward": turn_rewards.d_reward,
             "ground_truth_injected": self._state.ground_truth_injected,
             "true_positive": turn_rewards.true_positive,
             "true_negative": turn_rewards.true_negative,

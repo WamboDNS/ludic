@@ -382,6 +382,10 @@ Look for:
     # Reducers for metrics
     reducers = {
         # M metrics
+        "m_reward": Reducer(
+            kind="mean",
+            source=lambda item: item.info.get("m_reward") if item.info.get("agent") == "M" else None,
+        ),
         "m_injection_rate": Reducer(
             kind="mean",
             source=lambda item: 1.0 if item.info.get("injected") else 0.0,
@@ -389,36 +393,42 @@ Look for:
         ),
         "m_success_rate": Reducer(
             kind="mean",
-            source=lambda item: 1.0 if item.info.get("injection_success") else 0.0,
+            source=lambda item: (
+                1.0 if item.info.get("injection_success") else 0.0
+            ) if item.info.get("injected") else None,
             as_percent=True,
         ),
         "m_stealth_rate": Reducer(
             kind="mean",
             source=lambda item: (
-                1.0 if item.info.get("injected") and not item.info.get("detected") else 0.0
+                1.0 if not item.info.get("detected") else 0.0
             ) if item.info.get("injected") else None,
             as_percent=True,
         ),
         # D metrics
+        "d_reward": Reducer(
+            kind="mean",
+            source=lambda item: item.info.get("d_reward") if item.info.get("agent") == "D" else None,
+        ),
         "d_accuracy": Reducer(
             kind="mean",
             source=lambda item: (
                 1.0 if item.info.get("true_positive") or item.info.get("true_negative") else 0.0
-            ),
+            ) if item.info.get("agent") == "D" else None,
             as_percent=True,
         ),
         "d_precision": Reducer(
             kind="mean",
             source=lambda item: (
                 1.0 if item.info.get("true_positive") else 0.0
-            ) if item.info.get("d_predicted_injected") else None,
+            ) if item.info.get("agent") == "D" and (item.info.get("true_positive") or item.info.get("false_positive")) else None,
             as_percent=True,
         ),
         "d_recall": Reducer(
             kind="mean",
             source=lambda item: (
                 1.0 if item.info.get("true_positive") else 0.0
-            ) if item.info.get("ground_truth_injected") else None,
+            ) if item.info.get("agent") == "D" and item.info.get("ground_truth_injected") else None,
             as_percent=True,
         ),
         # General
@@ -434,12 +444,17 @@ Look for:
     logger_keys = [
         "train/loss",
         "train/avg_total_reward",
+        # M metrics
+        "train/m_reward",
         "train/m_injection_rate",
         "train/m_success_rate",
         "train/m_stealth_rate",
+        # D metrics
+        "train/d_reward",
         "train/d_accuracy",
         "train/d_precision",
         "train/d_recall",
+        # General
         "train/flag_leak_rate",
         "train/avg_prompt_length",
         "train/avg_completion_length",
