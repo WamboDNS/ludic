@@ -159,7 +159,12 @@ def main():
 
     # Logging
     parser.add_argument("--rollout-log", type=str, default="adversarial_rollouts.jsonl")
-    parser.add_argument("--logger", type=str, default="rich")
+    parser.add_argument("--logger", type=str, default="rich+wandb",
+                        help="Loggers to use: rich, print, wandb, none (combine with +)")
+    parser.add_argument("--wandb-project", type=str, default="prompt-injection-adversarial",
+                        help="Wandb project name")
+    parser.add_argument("--wandb-run-name", type=str, default=None,
+                        help="Wandb run name (auto-generated if not set)")
     parser.add_argument("--final-save", action="store_true")
 
     args = parser.parse_args()
@@ -440,15 +445,53 @@ Look for:
         "train/avg_completion_length",
     ]
 
-    if args.logger == "rich" and sys.stdout.isatty():
-        train_logger = RichLiveLogger(
-            keys=logger_keys,
-            spark_key="train/avg_total_reward",
-            history=100,
-            precision=4,
+    # Parse logger configuration
+    raw_logger = args.logger or "rich+wandb"
+    logger_tokens = [tok.strip().lower() for tok in raw_logger.replace("+", ",").split(",") if tok.strip()]
+    valid_loggers = {"rich", "print", "wandb", "none"}
+    unknown = [tok for tok in logger_tokens if tok not in valid_loggers]
+    if unknown:
+        raise SystemExit(f"Unknown logger(s): {unknown}. Valid: {sorted(valid_loggers)}")
+    if "none" in logger_tokens:
+        logger_tokens = ["none"]
+
+    # Setup console logger
+    console_logger = None
+    if "print" in logger_tokens:
+        console_logger = PrintLogger(prefix="[trainer]", keys=logger_keys, precision=4)
+    elif "rich" in logger_tokens:
+        if not sys.stdout.isatty():
+            console_logger = PrintLogger(prefix="[trainer]", keys=logger_keys, precision=4)
+        else:
+            console_logger = RichLiveLogger(
+                keys=logger_keys,
+                spark_key="train/avg_total_reward",
+                history=100,
+                precision=4,
+            )
+
+    # Setup wandb logger
+    wandb_logger = None
+    if "wandb" in logger_tokens:
+        wandb_config = {
+            **dict(vars(args)),
+            "sandbox": "primeintellect",
+            "agents": ["M (attacker)", "D (detector)"],
+        }
+        wandb_logger = WandbLogger(
+            config=wandb_config,
+            project=args.wandb_project,
+            name=args.wandb_run_name,
         )
-    else:
-        train_logger = PrintLogger(prefix="[trainer]", keys=logger_keys, precision=4)
+        print(f"Wandb logging enabled: project={args.wandb_project}")
+
+    # Combine loggers
+    train_logger = None
+    if logger_tokens != ["none"]:
+        if console_logger and wandb_logger:
+            train_logger = TeeLogger(console_logger, wandb_logger)
+        else:
+            train_logger = console_logger or wandb_logger
 
     # Create trainer
     trainer = Trainer(
