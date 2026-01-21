@@ -70,8 +70,9 @@ from .simulation import (
 # Detection utilities
 from .detection import (
     check_flag_leakage,
-    detect_injection,
+    extract_xml_tag,
     parse_d_classification,
+    parse_m_output,
 )
 
 # Rewards
@@ -113,8 +114,9 @@ __all__ = [
     "create_simulators",
     # Detection
     "check_flag_leakage",
-    "detect_injection",
+    "extract_xml_tag",
     "parse_d_classification",
+    "parse_m_output",
     # Rewards
     "RewardConfig",
     "TurnRewardSummary",
