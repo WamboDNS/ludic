@@ -234,17 +234,19 @@ def main():
     model.to("cuda" if torch.cuda.is_available() else "cpu")
     model.print_trainable_parameters()
 
-    # vLLM clients
+    # vLLM clients - both use the same server to save GPU memory
     agent_client = VLLMChatClient(
         host=args.agent_host,
         port=args.agent_port,
         enable_weight_updates=True,
+        device="cuda:0",
     )
     publisher = create_vllm_publisher(agent_client)
 
+    # Simulators share the same vLLM instance (no weight updates needed for them)
     simulator_client = VLLMChatClient(
-        host=args.simulator_host,
-        port=args.simulator_port,
+        host=args.agent_host,  # Same server as agents
+        port=args.agent_port,
         enable_weight_updates=False,
     )
 
