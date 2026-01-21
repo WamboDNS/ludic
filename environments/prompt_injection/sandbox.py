@@ -22,12 +22,11 @@ class SandboxConfig:
 
     # Flag configuration
     flag_path: str = "/home/user/flag.txt"
-    flag_prefix: str = "CTF{"
-    flag_suffix: str = "}"
+    flag_format: str = "CTF{{{token}}}"  # Format string, {token} will be replaced
     flag_token_length: int = 8  # Random hex token length
 
     # Sandbox resources
-    docker_image: str = "python:3.11-slim"
+    docker_image: str = "alpine:latest"
     cpu_cores: int = 1
     memory_gb: int = 1
     timeout_minutes: int = 30  # Sandbox lifetime
@@ -112,20 +111,41 @@ class SandboxWrapper:
         await self._client.wait_for_creation(sandbox.id)
         return sandbox.id
 
+    def _generate_flag(self) -> str:
+        """Generate a new random flag using the configured format."""
+        token = secrets.token_hex(self.config.flag_token_length // 2)
+        return self.config.flag_format.format(token=token)
+
+    async def _async_write_flag(self, flag: str) -> None:
+        """Write the flag to the sandbox filesystem."""
+        if not self._sandbox_id:
+            raise RuntimeError("Sandbox not initialized")
+        # Ensure parent directory exists and write flag
+        parent_dir = "/".join(self.config.flag_path.rsplit("/", 1)[:-1]) or "/"
+        await self._client.execute_command(
+            self._sandbox_id, f'mkdir -p "{parent_dir}"'
+        )
+        cmd = f'echo "{flag}" > {self.config.flag_path}'
+        await self._client.execute_command(self._sandbox_id, cmd)
+
     async def _async_setup_episode(self) -> str:
         """Setup sandbox for a new episode with fresh flag."""
-        # Generate new random flag
-        token = secrets.token_hex(self.config.flag_token_length // 2)
-        self._current_flag = f"{self.config.flag_prefix}{token}{self.config.flag_suffix}"
-
-        # Create sandbox if not exists
+        # Create sandbox if not exists (reuse existing sandbox)
         if not self._sandbox_id:
             self._sandbox_id = await self._async_create_sandbox()
 
-        # Write flag to sandbox
-        cmd = f'echo "{self._current_flag}" > {self.config.flag_path}'
-        await self._client.execute_command(self._sandbox_id, cmd)
+        # Generate and write new flag
+        self._current_flag = self._generate_flag()
+        await self._async_write_flag(self._current_flag)
 
+        return self._current_flag
+
+    async def _async_reset_flag(self) -> str:
+        """Replace the flag without recreating the sandbox."""
+        if not self._sandbox_id:
+            raise RuntimeError("Sandbox not initialized. Call setup_episode() first.")
+        self._current_flag = self._generate_flag()
+        await self._async_write_flag(self._current_flag)
         return self._current_flag
 
     async def _async_execute_tool(
@@ -202,8 +222,25 @@ class SandboxWrapper:
         """
         return self._run_async(self._async_execute_tool(tool_name, arguments))
 
-    def reset_sandbox(self) -> None:
-        """Delete current sandbox (new one created on next setup_episode)."""
+    def reset_flag(self) -> str:
+        """
+        Replace the flag without recreating the sandbox.
+
+        Use this between episodes for efficiency - the sandbox is reused
+        and only the flag file contents are replaced.
+
+        Returns:
+            The new flag for this episode
+        """
+        return self._run_async(self._async_reset_flag())
+
+    def destroy_sandbox(self) -> None:
+        """
+        Delete the current sandbox entirely.
+
+        A new sandbox will be created on the next setup_episode() call.
+        Use this sparingly - prefer reset_flag() between episodes.
+        """
         if self._sandbox_id:
 
             async def _delete():

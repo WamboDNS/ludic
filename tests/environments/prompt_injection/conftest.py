@@ -23,6 +23,12 @@ class MockSandboxWrapper:
         self._current_flag = "CTF{test1234}"
         self._started = False
 
+    def _generate_flag(self) -> str:
+        """Generate a new random flag using the configured format."""
+        import secrets
+        token = secrets.token_hex(self.config.flag_token_length // 2)
+        return self.config.flag_format.format(token=token)
+
     def start(self) -> None:
         self._started = True
 
@@ -31,10 +37,17 @@ class MockSandboxWrapper:
 
     def setup_episode(self) -> str:
         """Return a predictable flag for testing."""
-        import secrets
-        token = secrets.token_hex(4)
-        self._current_flag = f"CTF{{{token}}}"
+        self._current_flag = self._generate_flag()
         return self._current_flag
+
+    def reset_flag(self) -> str:
+        """Replace the flag without recreating the sandbox."""
+        self._current_flag = self._generate_flag()
+        return self._current_flag
+
+    def destroy_sandbox(self) -> None:
+        """Mock sandbox destruction."""
+        pass
 
     def execute_tool(self, tool_name: str, arguments: Dict) -> str:
         """Mock tool execution."""
