@@ -146,7 +146,7 @@ def main():
                         help="Number of gradient updates")
     parser.add_argument("--max-steps-per-episode", type=int, default=10,
                         help="Max turns per episode")
-    parser.add_argument("--group-size", type=int, default=4,
+    parser.add_argument("--group-size", type=int, default=8,
                         help="Group size for GRPO normalization")
 
     # Scenario configuration
