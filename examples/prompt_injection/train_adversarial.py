@@ -39,6 +39,7 @@ from typing import List, Optional
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import get_peft_model, LoraConfig, TaskType
+from huggingface_hub import HfApi, create_repo
 
 from environments.prompt_injection import (
     PromptInjectionEnv,
@@ -137,11 +138,16 @@ def main():
 
     # Training parameters
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--concurrency", type=int, default=32)
-    parser.add_argument("--rollouts-per-update", type=int, default=64)
-    parser.add_argument("--train-steps", type=int, default=100)
-    parser.add_argument("--max-steps-per-episode", type=int, default=15)
-    parser.add_argument("--group-size", type=int, default=8)
+    parser.add_argument("--concurrency", type=int, default=8,
+                        help="Number of concurrent rollouts")
+    parser.add_argument("--rollouts-per-update", type=int, default=16,
+                        help="Rollouts to collect before each gradient update")
+    parser.add_argument("--train-steps", type=int, default=50,
+                        help="Number of gradient updates")
+    parser.add_argument("--max-steps-per-episode", type=int, default=10,
+                        help="Max turns per episode")
+    parser.add_argument("--group-size", type=int, default=4,
+                        help="Group size for GRPO normalization")
 
     # Scenario configuration
     parser.add_argument("--difficulty", choices=["easy", "medium", "hard", "all"], default="easy")
@@ -171,6 +177,10 @@ def main():
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints_adversarial")
     parser.add_argument("--checkpoint-every", type=int, default=10)
     parser.add_argument("--max-to-keep", type=int, default=3)
+    parser.add_argument("--hf-repo", type=str, default=None,
+                        help="HuggingFace repo to push checkpoints (e.g., 'username/prompt-injection-lora')")
+    parser.add_argument("--hf-push-every", type=int, default=None,
+                        help="Push to HF every N steps (defaults to --checkpoint-every)")
 
     # Logging
     parser.add_argument("--rollout-log", type=str, default="adversarial_rollouts.jsonl")
@@ -546,16 +556,53 @@ Look for:
     print(f"Training steps: {args.train_steps}")
     print(f"Rollouts per update: {args.rollouts_per_update}")
     print(f"Group size: {args.group_size}")
+    if args.hf_repo:
+        print(f"HuggingFace repo: {args.hf_repo}")
     print(f"{'='*60}\n")
 
+    # Setup HuggingFace repo if specified
+    hf_api = None
+    if args.hf_repo:
+        hf_api = HfApi()
+        try:
+            create_repo(args.hf_repo, repo_type="model", exist_ok=True)
+            print(f"HuggingFace repo ready: https://huggingface.co/{args.hf_repo}")
+        except Exception as e:
+            print(f"Warning: Could not create HF repo: {e}")
+            print("Continuing without HF sync...")
+            hf_api = None
+
+    # Run training
     trainer.train_sync(args.train_steps)
 
+    # Save final checkpoint
     if args.final_save:
         try:
             trainer.save_checkpoint(metadata={"final": True})
             print("Final checkpoint saved.")
         except RuntimeError:
             pass
+
+    # Upload to HuggingFace
+    if hf_api and args.hf_repo:
+        print(f"\nUploading LoRA adapters to HuggingFace: {args.hf_repo}")
+        try:
+            # Save LoRA adapters
+            lora_save_path = os.path.join(args.checkpoint_dir, "final_lora")
+            model.save_pretrained(lora_save_path)
+            tokenizer.save_pretrained(lora_save_path)
+
+            # Upload to HF
+            hf_api.upload_folder(
+                folder_path=lora_save_path,
+                repo_id=args.hf_repo,
+                commit_message=f"Training complete: {args.train_steps} steps, {args.difficulty} difficulty",
+            )
+            print(f"Successfully uploaded to: https://huggingface.co/{args.hf_repo}")
+        except Exception as e:
+            print(f"Failed to upload to HuggingFace: {e}")
+
+    print("\nTraining complete!")
 
 
 if __name__ == "__main__":
