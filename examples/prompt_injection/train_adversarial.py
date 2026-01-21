@@ -15,6 +15,7 @@ Architecture:
 from __future__ import annotations
 
 import argparse
+import atexit
 import os
 import sys
 from functools import partial
@@ -27,6 +28,7 @@ from peft import get_peft_model, LoraConfig, TaskType
 from environments.prompt_injection import (
     PromptInjectionEnv,
     SandboxConfig,
+    SandboxWrapper,
     get_scenarios_by_difficulty,
     RewardConfig,
 )
@@ -129,6 +131,12 @@ def main():
     # Scenario configuration
     parser.add_argument("--difficulty", choices=["easy", "medium", "hard", "all"], default="easy")
 
+    # Sandbox configuration (PrimeIntellect)
+    parser.add_argument("--sandbox-flag-path", default="/home/user/flag.txt",
+                        help="Path where flag is stored in sandbox")
+    parser.add_argument("--sandbox-timeout", type=int, default=60,
+                        help="Sandbox lifetime in minutes")
+
     # LoRA configuration
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha-mult", type=float, default=2.0)
@@ -213,9 +221,25 @@ def main():
         temperature=0.7,
     )
 
-    # Environment registry
-    scenarios = get_scenarios_by_difficulty(args.difficulty)
+    # Initialize PrimeIntellect sandbox
+    print("Initializing PrimeIntellect sandbox...")
+    sandbox_config = SandboxConfig(
+        flag_path=args.sandbox_flag_path,
+        timeout_minutes=args.sandbox_timeout,
+    )
+    sandbox = SandboxWrapper(sandbox_config)
+    sandbox.start()
+    print(f"Sandbox started (flag path: {sandbox_config.flag_path})")
 
+    # Register cleanup on exit
+    def cleanup_sandbox():
+        print("\nCleaning up sandbox...")
+        sandbox.stop()
+        print("Sandbox stopped.")
+
+    atexit.register(cleanup_sandbox)
+
+    # Environment registry
     def make_env(difficulty: str = "easy"):
         """Factory for prompt injection environment."""
         # Create fresh simulators for each env instance
@@ -228,12 +252,12 @@ def main():
             client=simulator_client,
             chat_template=chat_template,
             config=simulator_config,
-            sandbox=None,  # Will be set by env
+            sandbox=sandbox,  # Shared sandbox for tool execution
         )
         return PromptInjectionEnv(
             alice=alice,
             bob=bob,
-            sandbox=None,  # Uses mock for now
+            sandbox=sandbox,  # Real PrimeIntellect sandbox
             scenarios=get_scenarios_by_difficulty(difficulty),
         )
 
@@ -445,6 +469,7 @@ Look for:
     print(f"{'='*60}")
     print(f"Model: {args.model}")
     print(f"Difficulty: {args.difficulty}")
+    print(f"Sandbox: PrimeIntellect (flag: {args.sandbox_flag_path})")
     print(f"Training steps: {args.train_steps}")
     print(f"Rollouts per update: {args.rollouts_per_update}")
     print(f"Group size: {args.group_size}")
