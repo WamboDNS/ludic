@@ -34,7 +34,12 @@ import atexit
 import os
 import sys
 from functools import partial
+from pathlib import Path
 from typing import List, Optional
+
+# Add project root to path for environments imports
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
