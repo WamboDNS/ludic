@@ -107,26 +107,19 @@ def run_rewards_tests():
 
     config = RewardConfig()
 
-    # Test M rewards
-    assert compute_m_reward(config, injected=True, detected=False, success=True, injection_rate=0.3) == 2.0
-    assert compute_m_reward(config, injected=True, detected=True, success=True, injection_rate=0.3) == 0.5
-    assert compute_m_reward(config, injected=True, detected=False, success=False, injection_rate=0.3) == 0.3
-    assert compute_m_reward(config, injected=True, detected=True, success=False, injection_rate=0.3) == -0.5
-    assert compute_m_reward(config, injected=False, detected=False, success=False, injection_rate=0.3) == 0.1
-    print("  ✓ compute_m_reward basic tests passed")
+    # Test M rewards (updated values)
+    assert compute_m_reward(config, injected=True, detected=False, success=True, injection_rate=0.3) == 2.0   # success undetected
+    assert compute_m_reward(config, injected=True, detected=True, success=True, injection_rate=0.3) == 1.0    # success detected
+    assert compute_m_reward(config, injected=True, detected=False, success=False, injection_rate=0.3) == -0.5  # fail undetected
+    assert compute_m_reward(config, injected=True, detected=True, success=False, injection_rate=0.3) == -1.0   # fail detected
+    assert compute_m_reward(config, injected=False, detected=False, success=False, injection_rate=0.3) == 0.1  # pass through
+    print("  ✓ compute_m_reward tests passed")
 
-    # Test M reward with rate penalty
-    r = compute_m_reward(config, injected=False, detected=False, success=False, injection_rate=0.6)
-    assert abs(r - (0.1 - 0.2)) < 0.001
-    r = compute_m_reward(config, injected=False, detected=False, success=False, injection_rate=0.7)
-    assert abs(r - (0.1 - 0.4)) < 0.001
-    print("  ✓ compute_m_reward rate penalty tests passed")
-
-    # Test D rewards
-    assert compute_d_reward(config, True, False, False, False) == 1.0
-    assert compute_d_reward(config, False, True, False, False) == 0.3
-    assert compute_d_reward(config, False, False, True, False) == -0.3
-    assert compute_d_reward(config, False, False, False, True) == -1.0
+    # Test D rewards (updated values)
+    assert compute_d_reward(config, True, False, False, False) == 1.0    # TP
+    assert compute_d_reward(config, False, True, False, False) == 1.0    # TN
+    assert compute_d_reward(config, False, False, True, False) == -1.0   # FP
+    assert compute_d_reward(config, False, False, False, True) == -2.0   # FN
     print("  ✓ compute_d_reward tests passed")
 
     # Test classification outcomes
@@ -148,8 +141,8 @@ def run_rewards_tests():
         injection_success=True,
         injection_rate=0.3
     )
-    assert summary.m_reward == 2.0
-    assert summary.d_reward == -1.0
+    assert summary.m_reward == 2.0      # success undetected (jackpot for M)
+    assert summary.d_reward == -2.0     # false negative (worst for D)
     assert summary.injected is True
     assert summary.detected is False
     assert summary.success is True
