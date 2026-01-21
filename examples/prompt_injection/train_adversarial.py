@@ -6,10 +6,25 @@ Two agents trained in alternating phases:
 - Agent D (Defense): Learns to detect injected messages
 
 Uses local vLLM instances for all inference (no external APIs).
+Default model: Qwen/Qwen2.5-7B-Instruct
 
 Architecture:
-- vLLM Instance 1 (port 8000): Serves M and D (trained agents, weight updates enabled)
+- vLLM Instance 1 (port 8000): Serves M and D (trained agents, LoRA enabled)
 - vLLM Instance 2 (port 8001): Serves Alice and Bob simulation (static weights)
+
+Setup:
+    # Terminal 1: Agents
+    python -m vllm.entrypoints.openai.api_server \\
+        --model Qwen/Qwen2.5-7B-Instruct --port 8000 \\
+        --enable-lora --max-lora-rank 16 --gpu-memory-utilization 0.45
+
+    # Terminal 2: Simulators
+    python -m vllm.entrypoints.openai.api_server \\
+        --model Qwen/Qwen2.5-7B-Instruct --port 8001 \\
+        --gpu-memory-utilization 0.45
+
+    # Terminal 3: Training
+    python examples/prompt_injection/train_adversarial.py --difficulty easy
 """
 
 from __future__ import annotations
@@ -109,7 +124,7 @@ def main():
     parser = argparse.ArgumentParser(description="Adversarial training for prompt injection attack/defense.")
 
     # Model configuration
-    parser.add_argument("--model", default="meta-llama/Llama-3.1-8B-Instruct",
+    parser.add_argument("--model", default="Qwen/Qwen2.5-7B-Instruct",
                         help="Base model for M and D agents")
     parser.add_argument("--simulator-model", default=None,
                         help="Model for Alice/Bob simulation (defaults to --model)")
