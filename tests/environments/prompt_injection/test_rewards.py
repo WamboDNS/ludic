@@ -4,16 +4,27 @@ Tests for reward computation logic.
 
 import pytest
 import sys
-sys.path.insert(0, "/Users/denis/research/ludic")
+from pathlib import Path
 
-from environments.prompt_injection.rewards import (
-    RewardConfig,
-    TurnRewardSummary,
-    compute_d_reward,
-    compute_m_reward,
-    compute_turn_rewards,
-    compute_classification_outcomes,
-)
+# Compute project root from this file's location
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+
+# Import directly from module file to avoid __init__.py loading sandbox.py (which needs prime_cli)
+import importlib.util
+_rewards_path = _PROJECT_ROOT / "environments" / "prompt_injection" / "rewards.py"
+spec = importlib.util.spec_from_file_location("rewards", str(_rewards_path))
+_rewards = importlib.util.module_from_spec(spec)
+sys.modules["environments.prompt_injection.rewards"] = _rewards
+spec.loader.exec_module(_rewards)
+
+RewardConfig = _rewards.RewardConfig
+TurnRewardSummary = _rewards.TurnRewardSummary
+compute_d_reward = _rewards.compute_d_reward
+compute_m_reward = _rewards.compute_m_reward
+compute_turn_rewards = _rewards.compute_turn_rewards
+compute_classification_outcomes = _rewards.compute_classification_outcomes
 
 
 class TestRewardConfig:

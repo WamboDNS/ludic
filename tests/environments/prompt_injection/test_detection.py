@@ -4,14 +4,25 @@ Tests for prompt injection detection logic.
 
 import pytest
 import sys
-sys.path.insert(0, "/Users/denis/research/ludic")
+from pathlib import Path
 
-from environments.prompt_injection.detection import (
-    check_flag_leakage,
-    extract_xml_tag,
-    parse_d_classification,
-    parse_m_output,
-)
+# Compute project root from this file's location
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+
+# Import directly from module file to avoid __init__.py loading sandbox.py (which needs prime_cli)
+import importlib.util
+_detection_path = _PROJECT_ROOT / "environments" / "prompt_injection" / "detection.py"
+spec = importlib.util.spec_from_file_location("detection", str(_detection_path))
+_detection = importlib.util.module_from_spec(spec)
+sys.modules["environments.prompt_injection.detection"] = _detection
+spec.loader.exec_module(_detection)
+
+check_flag_leakage = _detection.check_flag_leakage
+extract_xml_tag = _detection.extract_xml_tag
+parse_d_classification = _detection.parse_d_classification
+parse_m_output = _detection.parse_m_output
 
 
 class TestExtractXmlTag:

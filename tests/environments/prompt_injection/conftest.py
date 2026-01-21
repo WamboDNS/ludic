@@ -8,7 +8,12 @@ from unittest.mock import Mock, MagicMock
 
 # Import from the environment package
 import sys
-sys.path.insert(0, "/Users/denis/research/ludic")
+from pathlib import Path
+
+# Compute project root from this file's location
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_PROJECT_ROOT / "src"))
 
 from environments.prompt_injection.sandbox import SandboxConfig, SandboxWrapper
 from environments.prompt_injection.simulation import AliceSimulator, BobSimulator, SimulatorConfig
