@@ -27,6 +27,11 @@ examples = [
     "datasets==4.4.1", # pinned to the versions in uv.lock that are known to work
     "math-verify==0.8.0", # pinned to the versions in uv.lock that are known to work
 ]
+prompt-injection = [
+    "prime>=0.1.0",
+    "wandb>=0.19.0",
+    "huggingface_hub>=0.30.0",
+]
 tinker = [
     "tinker==0.7.0", # pinned to the versions in uv.lock that are known to work
     "tinker-cookbook @ git+ssh://git@github.com/thinking-machines-lab/tinker-cookbook.git@d2adfe562edb9cc97b43ceab537a3beeff892442",
