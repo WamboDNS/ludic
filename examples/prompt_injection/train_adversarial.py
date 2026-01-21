@@ -179,8 +179,8 @@ def main():
     parser.add_argument("--max-to-keep", type=int, default=3)
     parser.add_argument("--hf-repo", type=str, default=None,
                         help="HuggingFace repo to push checkpoints (e.g., 'username/prompt-injection-lora')")
-    parser.add_argument("--hf-push-every", type=int, default=None,
-                        help="Push to HF every N steps (defaults to --checkpoint-every)")
+    parser.add_argument("--hf-push-every", type=int, default=15,
+                        help="Push snapshot to HF every N steps")
 
     # Logging
     parser.add_argument("--rollout-log", type=str, default="adversarial_rollouts.jsonl")
@@ -572,35 +572,65 @@ Look for:
             print("Continuing without HF sync...")
             hf_api = None
 
-    # Run training
-    trainer.train_sync(args.train_steps)
+    def upload_to_hf(step: int, is_final: bool = False):
+        """Upload current LoRA weights to HuggingFace."""
+        if not hf_api or not args.hf_repo:
+            return
 
-    # Save final checkpoint
-    if args.final_save:
-        try:
-            trainer.save_checkpoint(metadata={"final": True})
-            print("Final checkpoint saved.")
-        except RuntimeError:
-            pass
-
-    # Upload to HuggingFace
-    if hf_api and args.hf_repo:
-        print(f"\nUploading LoRA adapters to HuggingFace: {args.hf_repo}")
+        tag = "final" if is_final else f"step-{step}"
+        print(f"\nUploading snapshot to HuggingFace: {args.hf_repo} ({tag})")
         try:
             # Save LoRA adapters
-            lora_save_path = os.path.join(args.checkpoint_dir, "final_lora")
+            lora_save_path = os.path.join(args.checkpoint_dir, f"hf_snapshot_{tag}")
+            os.makedirs(lora_save_path, exist_ok=True)
             model.save_pretrained(lora_save_path)
             tokenizer.save_pretrained(lora_save_path)
+
+            # Save training info
+            import json
+            with open(os.path.join(lora_save_path, "training_info.json"), "w") as f:
+                json.dump({
+                    "step": step,
+                    "total_steps": args.train_steps,
+                    "difficulty": args.difficulty,
+                    "model": args.model,
+                    "is_final": is_final,
+                }, f, indent=2)
 
             # Upload to HF
             hf_api.upload_folder(
                 folder_path=lora_save_path,
                 repo_id=args.hf_repo,
-                commit_message=f"Training complete: {args.train_steps} steps, {args.difficulty} difficulty",
+                commit_message=f"{'Final' if is_final else 'Snapshot'}: step {step}/{args.train_steps}, {args.difficulty} difficulty",
             )
-            print(f"Successfully uploaded to: https://huggingface.co/{args.hf_repo}")
+            print(f"Uploaded to: https://huggingface.co/{args.hf_repo}")
         except Exception as e:
             print(f"Failed to upload to HuggingFace: {e}")
+
+    # Run training with periodic HF snapshots
+    steps_completed = 0
+    hf_push_every = args.hf_push_every
+
+    while steps_completed < args.train_steps:
+        # Train for a chunk of steps
+        steps_this_chunk = min(hf_push_every, args.train_steps - steps_completed)
+        trainer.train_sync(steps_this_chunk)
+        steps_completed += steps_this_chunk
+
+        # Upload snapshot to HF (not for final step, that's handled separately)
+        if hf_api and steps_completed < args.train_steps:
+            upload_to_hf(steps_completed)
+
+    # Save final checkpoint
+    if args.final_save:
+        try:
+            trainer.save_checkpoint(metadata={"final": True})
+            print("Final checkpoint saved locally.")
+        except RuntimeError:
+            pass
+
+    # Final upload to HuggingFace
+    upload_to_hf(args.train_steps, is_final=True)
 
     print("\nTraining complete!")
 
