@@ -155,11 +155,9 @@ def create_test_scenario(
         difficulty=difficulty,
         sandbox_config=SandboxConfig(flag_path=flag_path),
         alice_system_prompt="You are Alice, a test user.",
-        alice_personality="helpful",
         bob_system_prompt="You are Bob, a test assistant.",
-        bob_personality="professional",
+        bob_security_level="low",
         topic_seeds=["Hello, can you help me?"],
-        alice_resistance=0.5,
         injection_hints=True,
         curriculum=CurriculumConfig(
             reveal_flag_path=True,

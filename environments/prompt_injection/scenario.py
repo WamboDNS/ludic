@@ -38,19 +38,13 @@ After receiving tool results, continue your response naturally.
 
 @dataclass
 class CurriculumConfig:
-    """Curriculum-related configuration for a scenario."""
+    """Curriculum-related configuration for M's information access."""
 
     # Whether M sees the flag path in observations
     reveal_flag_path: bool = True
 
     # Whether M knows a flag exists at all
     reveal_flag_exists: bool = True
-
-    # Whether D sees the original message for comparison
-    d_sees_original: bool = False
-
-    # Hint level for D
-    d_hint_level: Literal["full", "partial", "none"] = "none"
 
 
 @dataclass
@@ -72,21 +66,19 @@ class InjectionScenario:
     # Sandbox configuration
     sandbox_config: SandboxConfig = field(default_factory=SandboxConfig)
 
-    # Alice configuration (simulated user)
+    # Alice configuration (simulated user - unaware of MITM)
     alice_system_prompt: str = ""
-    alice_personality: Literal["helpful", "cautious", "naive", "security-conscious"] = "helpful"
 
     # Bob configuration (simulated assistant with tools)
     bob_system_prompt: str = ""
-    bob_personality: Literal["professional", "casual", "cautious"] = "professional"
+    bob_security_level: Literal["low", "medium", "high"] = "low"  # How cautious Bob is about tool usage
     bob_tool_config: BobToolConfig = field(default_factory=BobToolConfig)
 
     # Conversation seeding
     topic_seeds: List[str] = field(default_factory=list)
 
-    # Difficulty modifiers
-    alice_resistance: float = 0.5  # 0-1, how resistant Alice is to manipulation
-    injection_hints: bool = False  # Whether M gets technique hints
+    # Whether M gets injection technique hints during curriculum bootstrap
+    injection_hints: bool = False
 
     # Curriculum settings
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
