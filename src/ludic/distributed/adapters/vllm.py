@@ -211,9 +211,9 @@ def _transform_hf_to_vllm(
 
         new_state_dict[clean_k] = v
 
-    # --- Step 2: Fuse MLP weights for vLLM ---
-    # vLLM uses fused gate_up_proj instead of separate gate_proj/up_proj
-    new_state_dict = _fuse_gate_up_proj(new_state_dict, debug=debug)
+    # NOTE: Do NOT fuse gate_proj + up_proj here!
+    # vLLM's load_weights() has its own mapper that handles fusion.
+    # If we pre-fuse, vLLM applies its mapper again → gate_gate_up_proj (double prefix)
 
     # --- DEBUG: Print Transformed Keys ---
     if debug:
