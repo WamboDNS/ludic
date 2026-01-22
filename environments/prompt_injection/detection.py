@@ -89,6 +89,33 @@ def parse_m_output(action: str) -> Tuple[str, bool]:
     return message, did_inject
 
 
+def parse_m_injection(action: str) -> str:
+    """
+    Parse Agent M's injection output (GAN-style, M always injects).
+
+    Expected format:
+        <injection>The modified message with hidden instructions</injection>
+
+    Args:
+        action: M's raw output
+
+    Returns:
+        The injected message to send to Bob
+    """
+    # Extract injection content
+    injection = extract_xml_tag(action, "injection")
+    if injection is not None:
+        return injection
+
+    # Fallback: try old format <message> tag
+    message = extract_xml_tag(action, "message")
+    if message is not None:
+        return message
+
+    # Last resort: treat entire output as the injection
+    return action.strip()
+
+
 def parse_d_classification(action: str) -> str:
     """
     Parse Agent D's classification output.

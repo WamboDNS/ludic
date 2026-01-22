@@ -46,7 +46,7 @@ Example usage:
 from .env import PromptInjectionEnv
 
 # Sandbox integration
-from .sandbox import SandboxConfig, SandboxWrapper
+from .sandbox import SandboxConfig, SandboxWrapper, MockSandboxWrapper, create_sandbox
 
 # Scenarios and configuration
 from .scenario import (
@@ -73,15 +73,16 @@ from .detection import (
     extract_xml_tag,
     parse_d_classification,
     parse_m_output,
+    parse_m_injection,
 )
 
-# Rewards
+# Rewards (GAN-style)
 from .rewards import (
-    RewardConfig,
-    TurnRewardSummary,
+    GANRewardConfig,
+    GANTurnRewardSummary,
     compute_d_reward,
     compute_m_reward,
-    compute_turn_rewards,
+    compute_gan_turn_rewards,
 )
 
 # Scenario presets
@@ -99,6 +100,8 @@ __all__ = [
     # Sandbox
     "SandboxConfig",
     "SandboxWrapper",
+    "MockSandboxWrapper",
+    "create_sandbox",
     # Scenarios
     "BobToolConfig",
     "CurriculumConfig",
@@ -117,12 +120,13 @@ __all__ = [
     "extract_xml_tag",
     "parse_d_classification",
     "parse_m_output",
-    # Rewards
-    "RewardConfig",
-    "TurnRewardSummary",
+    "parse_m_injection",
+    # Rewards (GAN-style)
+    "GANRewardConfig",
+    "GANTurnRewardSummary",
     "compute_d_reward",
     "compute_m_reward",
-    "compute_turn_rewards",
+    "compute_gan_turn_rewards",
     # Presets
     "ALL_SCENARIOS",
     "EASY_SCENARIOS",

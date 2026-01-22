@@ -3,6 +3,8 @@ PrimeIntellect Sandbox wrapper providing synchronous interface.
 
 The PrimeIntellect SDK is async, but Ludic environments are synchronous.
 This wrapper uses a background thread with a persistent event loop to bridge the gap.
+
+Also provides MockSandboxWrapper for testing without PrimeIntellect infrastructure.
 """
 
 from __future__ import annotations
@@ -13,7 +15,13 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
+try:
+    from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
+    PRIME_AVAILABLE = True
+except ImportError:
+    PRIME_AVAILABLE = False
+    AsyncSandboxClient = None
+    CreateSandboxRequest = None
 
 
 @dataclass
@@ -293,3 +301,151 @@ class SandboxWrapper:
 
     def __exit__(self, *args) -> None:
         self.stop()
+
+
+class MockSandboxWrapper:
+    """
+    Mock sandbox for testing without PrimeIntellect infrastructure.
+
+    Simulates file system operations in memory. Useful for:
+    - Local development and testing
+    - CI/CD pipelines
+    - Quick prototyping
+
+    Usage:
+        sandbox = MockSandboxWrapper(config)
+        sandbox.start()
+        flag = sandbox.setup_episode()  # Returns "CTF{...}"
+        result = sandbox.execute_tool("read_file", {"path": "/home/user/flag.txt"})
+    """
+
+    def __init__(self, config: SandboxConfig):
+        self.config = config
+        self._started = False
+        self._current_flag: Optional[str] = None
+        self._filesystem: Dict[str, str] = {}  # path -> content
+
+    def start(self) -> None:
+        """Initialize the mock sandbox."""
+        self._started = True
+        self._filesystem = {
+            "/home/user": "",  # Directory marker
+            "/home": "",
+            "/": "",
+        }
+
+    def _generate_flag(self) -> str:
+        """Generate a new random flag."""
+        token = secrets.token_hex(self.config.flag_token_length // 2)
+        return self.config.flag_format.format(token=token)
+
+    def setup_episode(self) -> str:
+        """Setup for a new episode with a fresh flag."""
+        if not self._started:
+            self.start()
+
+        self._current_flag = self._generate_flag()
+        self._filesystem[self.config.flag_path] = self._current_flag
+        return self._current_flag
+
+    def reset_flag(self) -> str:
+        """Replace the flag."""
+        self._current_flag = self._generate_flag()
+        self._filesystem[self.config.flag_path] = self._current_flag
+        return self._current_flag
+
+    def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Execute a tool call in the mock sandbox."""
+        if tool_name == "read_file":
+            if "read_file" not in self.config.tools_enabled:
+                return "Error: read_file tool is not enabled"
+            path = arguments.get("path", "")
+            if path in self._filesystem:
+                content = self._filesystem[path]
+                if content:  # Non-empty = file
+                    return content
+                else:
+                    return f"cat: {path}: Is a directory"
+            return f"cat: {path}: No such file or directory"
+
+        elif tool_name == "list_directory":
+            if "list_directory" not in self.config.tools_enabled:
+                return "Error: list_directory tool is not enabled"
+            path = arguments.get("path", "/")
+            if not path.endswith("/"):
+                path_prefix = path + "/"
+            else:
+                path_prefix = path
+
+            # Find entries in this directory
+            entries = []
+            for fpath in self._filesystem:
+                if fpath.startswith(path_prefix) or fpath == path:
+                    # Get the immediate child
+                    rel = fpath[len(path_prefix):] if fpath != path else ""
+                    if "/" not in rel and rel:
+                        entries.append(rel)
+            if not entries and path not in self._filesystem:
+                return f"ls: cannot access '{path}': No such file or directory"
+            return "\n".join(sorted(set(entries))) if entries else ""
+
+        elif tool_name == "execute_command":
+            if not self.config.enable_execute_command:
+                return "Error: execute_command tool is not enabled"
+            return "Mock: command execution not implemented"
+
+        else:
+            return f"Error: Unknown tool '{tool_name}'"
+
+    def destroy_sandbox(self) -> None:
+        """Reset the mock filesystem."""
+        self._filesystem = {}
+        self._current_flag = None
+
+    def stop(self) -> None:
+        """Stop the mock sandbox."""
+        self._started = False
+        self._filesystem = {}
+        self._current_flag = None
+
+    @property
+    def current_flag(self) -> Optional[str]:
+        """Get the current episode's flag."""
+        return self._current_flag
+
+    @property
+    def sandbox_id(self) -> Optional[str]:
+        """Mock sandbox ID."""
+        return "mock-sandbox" if self._started else None
+
+    def __enter__(self) -> "MockSandboxWrapper":
+        self.start()
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.stop()
+
+
+def create_sandbox(config: SandboxConfig, mock: bool = False) -> "SandboxWrapper | MockSandboxWrapper":
+    """
+    Factory function to create appropriate sandbox wrapper.
+
+    Args:
+        config: Sandbox configuration
+        mock: If True, use MockSandboxWrapper (no PrimeIntellect needed)
+              If False, use real SandboxWrapper (requires prime_sandboxes)
+
+    Returns:
+        SandboxWrapper or MockSandboxWrapper instance
+    """
+    if mock:
+        return MockSandboxWrapper(config)
+
+    if not PRIME_AVAILABLE:
+        raise ImportError(
+            "prime_sandboxes not installed. Install with: "
+            "pip install prime-sandboxes\n"
+            "Or use mock=True for testing."
+        )
+
+    return SandboxWrapper(config)
