@@ -70,6 +70,77 @@ class VllmTensorCommunicator(TensorCommunicator):
         self._comm.group.barrier()
 
 
+def _fuse_gate_up_proj(
+    state_dict: Dict[str, torch.Tensor],
+    *,
+    debug: bool = False,
+) -> Dict[str, torch.Tensor]:
+    """
+    Fuse gate_proj and up_proj into gate_up_proj for vLLM Qwen/Llama models.
+
+    vLLM uses fused MLP weights (gate_up_proj = concat(gate, up)) for efficiency,
+    but HuggingFace/PEFT keeps them separate. The weight sync path bypasses
+    AutoWeightsLoader, so we must fuse manually.
+
+    Pattern:
+        model.layers.N.mlp.gate_proj.weight + model.layers.N.mlp.up_proj.weight
+        -> model.layers.N.mlp.gate_up_proj.weight (concatenated along dim=0)
+    """
+    import re
+
+    # Find all gate_proj keys and their corresponding up_proj keys
+    gate_pattern = re.compile(r"^(model\.layers\.\d+\.mlp\.)gate_proj\.weight$")
+
+    gate_keys = {}
+    for k in state_dict:
+        match = gate_pattern.match(k)
+        if match:
+            prefix = match.group(1)
+            gate_keys[prefix] = k
+
+    if not gate_keys:
+        return state_dict  # No fusion needed
+
+    fused_dict: Dict[str, torch.Tensor] = {}
+    fused_prefixes = set()
+
+    for prefix, gate_key in gate_keys.items():
+        up_key = f"{prefix}up_proj.weight"
+
+        if up_key not in state_dict:
+            if debug:
+                print(f"⚠️ [FUSION] Missing up_proj for {gate_key}, skipping fusion")
+            continue
+
+        gate_weight = state_dict[gate_key]
+        up_weight = state_dict[up_key]
+
+        # vLLM expects gate_up_proj = concat([gate, up], dim=0)
+        fused_weight = torch.cat([gate_weight, up_weight], dim=0)
+        fused_key = f"{prefix}gate_up_proj.weight"
+
+        fused_dict[fused_key] = fused_weight
+        fused_prefixes.add(prefix)
+
+        if debug:
+            print(f"✅ [FUSION] {gate_key} + {up_key} -> {fused_key} {tuple(fused_weight.shape)}")
+
+    # Build final dict: copy non-fused keys, add fused keys
+    result: Dict[str, torch.Tensor] = {}
+    for k, v in state_dict.items():
+        # Skip gate_proj and up_proj that were fused
+        skip = False
+        for prefix in fused_prefixes:
+            if k == f"{prefix}gate_proj.weight" or k == f"{prefix}up_proj.weight":
+                skip = True
+                break
+        if not skip:
+            result[k] = v
+
+    result.update(fused_dict)
+    return result
+
+
 def _transform_hf_to_vllm(
     state_dict: Mapping[str, torch.Tensor],
     *,
@@ -77,7 +148,7 @@ def _transform_hf_to_vllm(
 ) -> Dict[str, torch.Tensor]:
     """
     Robustly normalizes HuggingFace/PEFT state dicts into a form that
-    vLLM's own weight loader can consume.
+    vLLM's weight sync can consume.
 
     Rules:
     1. Filter out all `lora_` adapter keys.
@@ -85,10 +156,10 @@ def _transform_hf_to_vllm(
     3. Strip the `.base_layer` artifact.
     4. Ensure `model.` prefix exists for layers if missing.
     5. Fix `model.model.*` → `model.*`.
+    6. Fuse gate_proj + up_proj -> gate_up_proj (vLLM uses fused MLP).
 
-    Important: we do NOT fuse Q/K/V or Gate/Up here.
-    We leave them as HF-style keys (q_proj, k_proj, v_proj, gate_proj, up_proj)
-    and let vLLM's AutoWeightsLoader handle stacking/fusion and sharding.
+    Note: The weight sync path calls model.load_weights() directly, which
+    bypasses AutoWeightsLoader. We must do fusion here.
     """
 
     # --- DEBUG: Print Original Keys ---
@@ -130,11 +201,15 @@ def _transform_hf_to_vllm(
 
         new_state_dict[clean_k] = v
 
-    # --- DEBUG: Print Transformed Keys (HF-normalized, not fused) ---
+    # --- Step 2: Fuse MLP weights for vLLM ---
+    # vLLM uses fused gate_up_proj instead of separate gate_proj/up_proj
+    new_state_dict = _fuse_gate_up_proj(new_state_dict, debug=debug)
+
+    # --- DEBUG: Print Transformed Keys ---
     if debug:
         print("\n" + "=" * 80)
         print(
-            f"🚀 [DEBUG] NORMALIZED HF KEYS (Ready for vLLM AutoWeightsLoader) - Total: {len(new_state_dict)}"
+            f"🚀 [DEBUG] FINAL vLLM KEYS (After Transform + Fusion) - Total: {len(new_state_dict)}"
         )
         print("=" * 80)
         for k in sorted(new_state_dict.keys()):
