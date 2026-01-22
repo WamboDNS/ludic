@@ -391,11 +391,15 @@ Look for:
     )
 
     # Request function
+    # Note: multi-agent env produces 2 rollouts per episode (M + D)
+    # So effective_group_size for GRPO must account for this
+    num_agents = 2  # M and D
+    effective_group_size = args.group_size // num_agents
     base_requests = args.rollouts_per_update // args.group_size
     base_requests_fn = build_requests_fn(rng, base_requests, train_inference, args.difficulty)
 
     def requests_fn() -> List[RolloutRequest]:
-        return GRPORequestStrategy(group_size=args.group_size).expand(base_requests_fn())
+        return GRPORequestStrategy(group_size=effective_group_size).expand(base_requests_fn())
 
     batch_source = RolloutBatchSource(
         orchestrator=engine,
