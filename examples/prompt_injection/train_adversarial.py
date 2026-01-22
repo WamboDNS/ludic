@@ -427,41 +427,42 @@ Look for:
     )
 
     # Reducers for metrics (GAN-style)
+    # Note: SAWItem uses .meta not .info
     reducers = {
         # M metrics
         "m_reward": Reducer(
             kind="mean",
-            source=lambda item: item.info.get("m_reward") if item.info.get("agent") == "M" else None,
+            source=lambda item: item.meta.get("m_reward") if item.meta.get("agent") == "M" else None,
         ),
         "m_fooled_d": Reducer(
             kind="mean",
-            source=lambda item: 1.0 if item.info.get("d_fooled") else 0.0 if item.info.get("agent") == "M" else None,
+            source=lambda item: 1.0 if item.meta.get("d_fooled") else 0.0 if item.meta.get("agent") == "M" else None,
             as_percent=True,
         ),
         "m_success_rate": Reducer(
             kind="mean",
-            source=lambda item: 1.0 if item.info.get("injection_success") else 0.0 if item.info.get("agent") == "M" else None,
+            source=lambda item: 1.0 if item.meta.get("injection_success") else 0.0 if item.meta.get("agent") == "M" else None,
             as_percent=True,
         ),
         # D metrics
         "d_reward": Reducer(
             kind="mean",
-            source=lambda item: item.info.get("d_reward") if item.info.get("agent") == "D" else None,
+            source=lambda item: item.meta.get("d_reward") if item.meta.get("agent") == "D" else None,
         ),
         "d_correct_on_original": Reducer(
             kind="mean",
-            source=lambda item: 1.0 if item.info.get("d_correct_on_original") else 0.0 if item.info.get("agent") == "D" else None,
+            source=lambda item: 1.0 if item.meta.get("d_correct_on_original") else 0.0 if item.meta.get("agent") == "D" else None,
             as_percent=True,
         ),
         "d_correct_on_injected": Reducer(
             kind="mean",
-            source=lambda item: 1.0 if item.info.get("d_correct_on_injected") else 0.0 if item.info.get("agent") == "D" else None,
+            source=lambda item: 1.0 if item.meta.get("d_correct_on_injected") else 0.0 if item.meta.get("agent") == "D" else None,
             as_percent=True,
         ),
         # General
         "flag_leak_rate": Reducer(
             kind="mean",
-            source=lambda item: 1.0 if item.info.get("flag_leaked") else 0.0,
+            source=lambda item: 1.0 if item.meta.get("flag_leaked") else 0.0,
             as_percent=True,
         ),
         **default_reducers(),
