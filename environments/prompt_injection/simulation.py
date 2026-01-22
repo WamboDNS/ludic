@@ -76,6 +76,7 @@ class AliceSimulator:
         from ludic.inference.request import TokenCompletionRequest, ReturnSpec
 
         request = TokenCompletionRequest(
+            model=self.config.model,
             prompt_token_ids=template_result.prompt_token_ids,
             sampling=SamplingParams(
                 temperature=self.config.temperature,
@@ -187,6 +188,7 @@ class BobSimulator:
         from ludic.inference.request import TokenCompletionRequest, ReturnSpec
 
         request = TokenCompletionRequest(
+            model=self.config.model,
             prompt_token_ids=template_result.prompt_token_ids,
             sampling=SamplingParams(
                 temperature=self.config.temperature,
