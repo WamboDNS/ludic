@@ -81,7 +81,7 @@ class AliceSimulator:
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
             ),
-            return_=ReturnSpec(logprobs=False),
+            return_=ReturnSpec(return_chosen_logprobs=False),
         )
 
         response, _ = await self.client.complete_tokens(request)
@@ -192,7 +192,7 @@ class BobSimulator:
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
             ),
-            return_=ReturnSpec(logprobs=False),
+            return_=ReturnSpec(return_chosen_logprobs=False),
         )
 
         response, _ = await self.client.complete_tokens(request)
