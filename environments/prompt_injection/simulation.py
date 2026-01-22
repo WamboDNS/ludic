@@ -87,7 +87,7 @@ class AliceSimulator:
 
         response, _ = await self.client.complete_tokens(request)
 
-        return response.content or ""
+        return response.text or ""
 
     def generate_response_sync(
         self,
@@ -198,7 +198,7 @@ class BobSimulator:
         )
 
         response, _ = await self.client.complete_tokens(request)
-        return response.content or ""
+        return response.text or ""
 
     async def generate_response(
         self,
