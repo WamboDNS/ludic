@@ -98,7 +98,17 @@ def _fuse_gate_up_proj(
             prefix = match.group(1)
             gate_keys[prefix] = k
 
+    if debug:
+        print(f"🔧 [FUSION] Found {len(gate_keys)} gate_proj keys to fuse")
+        for prefix, gk in gate_keys.items():
+            print(f"   prefix={prefix!r} gate_key={gk!r}")
+
     if not gate_keys:
+        if debug:
+            print("🔧 [FUSION] No gate_proj keys found, checking all MLP keys:")
+            for k in sorted(state_dict.keys()):
+                if "mlp" in k:
+                    print(f"   {k}")
         return state_dict  # No fusion needed
 
     fused_dict: Dict[str, torch.Tensor] = {}
@@ -243,7 +253,7 @@ class VllmPublisherAdapter(PolicyPublisher):
 def create_vllm_publisher(
     client: VLLMChatClient,
     *,
-    debug: bool = False,
+    debug: bool = True,  # Enabled for debugging weight sync issues
     rank0_only: bool = False,
 ) -> PolicyPublisher:
     """
