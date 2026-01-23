@@ -7,6 +7,12 @@ from .micro_batching import (
     split_items_by_token_budget,
     collate_micro_batches,
 )
+from .annotate_logprobs import (
+    compute_reference_logprobs,
+    annotate_saw_item_with_ref_logprobs,
+    annotate_saw_items_batch,
+    annotate_jsonl_with_ref_logprobs,
+)
 try:
     from .pipeline import PipelineBatchSource, run_pipeline_actor
 except ImportError:
@@ -43,4 +49,9 @@ __all__ = [
     "make_dataset_queue_requests_fn",
     "make_dataset_sequence_requests_fn",
     "make_chat_template_step_to_item",
+    # Reference logprob annotation utilities
+    "compute_reference_logprobs",
+    "annotate_saw_item_with_ref_logprobs",
+    "annotate_saw_items_batch",
+    "annotate_jsonl_with_ref_logprobs",
 ]

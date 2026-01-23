@@ -20,10 +20,12 @@ from torch.utils.data import Dataset, DataLoader, DistributedSampler, RandomSamp
 from ludic.types import Rollout, Step, AgentStep, EnvironmentStep, TokenTrace
 from ludic.training.filters import default_step_selector
 from ludic.training.types import (
+    ActorTokenLogps,
     BatchSource,
     CreditAssigner,
     SAWBatch,
     SAWItem,
+    SampleAttachments,
     SampleFilter,
 )
 
@@ -42,6 +44,8 @@ StepToItemFn = Callable[[Rollout, Step, float], SAWItem]
 
 def make_chat_template_step_to_item(
     tokenizer: "PreTrainedTokenizerBase",
+    *,
+    extract_ref_logprobs: bool = False,
 ) -> StepToItemFn:
     """
     Create a step_to_item function that uses HuggingFace chat templates.
@@ -53,6 +57,12 @@ def make_chat_template_step_to_item(
         - chat_prompt_messages: List of chat messages (system, user, etc.)
         - chat_completion: Dict with {"role": "assistant", "content": "..."}
           (optional - falls back to step.action if not provided)
+
+    Args:
+        tokenizer: HuggingFace tokenizer with chat template support.
+        extract_ref_logprobs: If True, extract reference policy logprobs from
+            step.trace.completion_logprobs and store in attachments.actor_logps.
+            Required for SFT with KL regularization (make_sft_with_kl).
 
     Returns:
         A function suitable for OfflineBatchSource.step_to_item that tokenizes
@@ -67,6 +77,11 @@ def make_chat_template_step_to_item(
                 "prev_obs": "...",
                 "action": "<think>...</think><move>5</move>",
                 "reward": 1.0,
+                "trace": {
+                    "prompt_token_ids": [...],
+                    "completion_token_ids": [...],
+                    "completion_logprobs": [...]  # For KL regularization
+                },
                 "info": {
                     "chat_prompt_messages": [
                         {"role": "system", "content": "You are playing Tic-Tac-Toe..."},
@@ -153,12 +168,30 @@ def make_chat_template_step_to_item(
             if k not in meta:
                 meta[k] = v
 
+        # Optionally extract reference logprobs from trace
+        attachments = SampleAttachments()
+        if extract_ref_logprobs and step.trace is not None:
+            trace = step.trace
+            if trace.completion_logprobs is not None:
+                # Verify length matches action tokens
+                if len(trace.completion_logprobs) != len(action_ids):
+                    raise ValueError(
+                        f"Trace completion_logprobs length ({len(trace.completion_logprobs)}) "
+                        f"does not match action tokens ({len(action_ids)}) for "
+                        f"rollout_id={rollout.id!r} step_index={step.index}. "
+                        "This may indicate tokenization drift between data collection and training."
+                    )
+                attachments = SampleAttachments(
+                    actor_logps=ActorTokenLogps(token_logps=list(trace.completion_logprobs))
+                )
+
         return SAWItem(
             input_ids=input_ids,
             attention_mask=attention_mask,
             action_mask=action_mask,
             weight=weight,
             meta=meta,
+            attachments=attachments,
         )
 
     return step_to_item

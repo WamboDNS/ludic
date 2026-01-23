@@ -831,3 +831,111 @@ def make_scalerl(
         loss=loss,
         preprocess=preprocess,
     )
+
+
+# ---------------------------------------------------------------------------
+# Imitation Learning (SFT + KL Regularization)
+# ---------------------------------------------------------------------------
+
+
+def make_sft_with_kl(
+    *,
+    kl_coeff: float = 0.1,
+    length_normalize: bool = True,
+    name: str = "sft_kl",
+) -> RLAlgorithm:
+    """
+    Imitation Learning: SFT with KL regularization to a reference policy.
+
+    Loss function:
+
+        L_SFT(π) = E[ (1/|a|) * Σ_i ( -log π(a_i|s, a_{<i}) + β * KL_token ) ]
+
+    where:
+        - The first term is standard SFT (cross-entropy on demonstrated actions)
+        - KL_token ≈ log π(a_i|s) - log π_ref(a_i|s) is the token-level KL penalty
+        - β (kl_coeff) controls the strength of regularization
+        - π_ref is the reference/base policy (pre-training)
+
+    The KL penalty prevents the fine-tuned model from drifting too far from the
+    base model, preserving general capabilities while learning the demonstration
+    distribution.
+
+    Data Requirements:
+        Samples must include `attachments.actor_logps` containing per-token
+        log-probabilities under the **reference policy** (the base model before
+        fine-tuning). This is computed once at data collection time.
+
+        To collect reference logprobs, use the base model to compute log π_ref(a_t|s)
+        for each demonstrated action token and store in the JSONL data.
+
+    Typical Workflow:
+        1. Collect demonstrations from a capable model (e.g., 32B+ parameters)
+        2. Filter for successful episodes
+        3. Compute reference logprobs using the base model to be fine-tuned
+        4. Train with this algorithm to warm up before RL
+
+    Args:
+        kl_coeff: Weight of the KL regularization term (β_SFT).
+            Higher values mean stronger regularization to the reference policy.
+            Typical values: 0.01 - 0.1
+        length_normalize: If True, normalize both losses by sequence length.
+            Recommended for consistent gradients across variable-length samples.
+        name: Algorithm name for logging/metrics.
+
+    Returns:
+        RLAlgorithm configured for imitation learning with KL regularization.
+
+    Example:
+        ```python
+        from ludic.training import (
+            OfflineBatchSource,
+            Trainer,
+            make_sft_with_kl,
+            make_chat_template_step_to_item,
+        )
+
+        # Create imitation learning algorithm
+        algo = make_sft_with_kl(kl_coeff=0.1)
+
+        # Load offline data with reference logprobs
+        batch_source = OfflineBatchSource(
+            jsonl_paths=[Path("data/demonstrations.jsonl")],
+            step_to_item=make_chat_template_step_to_item(tokenizer),
+            credit_assigner=algo.credit_assigner,
+            batch_size=32,
+        )
+
+        trainer = Trainer(model=model, algo=algo, batch_source=batch_source, ...)
+        ```
+
+    See Also:
+        - make_sft: Plain SFT without KL regularization
+        - TokenKLLoss: The underlying KL penalty implementation
+        - validate_actor_logps: Preprocessor that validates reference logprobs
+    """
+    credit_assigner: CreditAssigner = ConstantCredit(value=1.0)
+
+    # SFT loss: token-level cross-entropy
+    sft_loss: Loss = MaskedCausalLMCrossEntropyLoss(length_normalize=length_normalize)
+
+    # KL regularization: penalize deviation from reference policy
+    kl_loss: Loss = TokenKLLoss(coeff=kl_coeff, length_normalize=length_normalize)
+
+    # Combine losses
+    loss: Loss = CompositeLoss(
+        terms=[
+            LossTerm(name="sft", loss=sft_loss, weight=1.0),
+            LossTerm(name="kl", loss=kl_loss, weight=1.0),
+        ]
+    )
+
+    # Validate that reference logprobs are present
+    preprocess = validate_actor_logps
+
+    return RLAlgorithm(
+        name=name,
+        credit_assigner=credit_assigner,
+        loss=loss,
+        preprocess=preprocess,
+    )

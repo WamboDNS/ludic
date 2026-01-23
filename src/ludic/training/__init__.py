@@ -30,6 +30,7 @@ from .algorithm import (
     make_gmpo,
     make_scalerl,
     make_sft,
+    make_sft_with_kl,
 )
 from .credit_assignment import (
     GroupNormalizedReturn,
@@ -47,6 +48,8 @@ from .loss import (
     CISPOLoss,
     SAPOLoss,
     GMPOLoss,
+    MaskedCausalLMCrossEntropyLoss,
+    TokenKLLoss,
     KLLoss,
     EntropyBonus,
     LossTerm,
@@ -70,6 +73,10 @@ from .batching import (
     make_dataset_queue_requests_fn,
     make_dataset_sequence_requests_fn,
     make_chat_template_step_to_item,
+    # Reference logprob annotation
+    compute_reference_logprobs,
+    annotate_saw_items_batch,
+    annotate_jsonl_with_ref_logprobs,
 )
 from .stats import Reducer, apply_reducers_to_records, default_reducers
 from .loggers import TrainingLogger, PrintLogger, RichLiveLogger, TeeLogger, WandbLogger
@@ -94,6 +101,7 @@ __all__ = [
     "make_gmpo",
     "make_scalerl",
     "make_sft",
+    "make_sft_with_kl",
     # Credit assignment
     "GroupNormalizedReturn",
     "MonteCarloReturn",
@@ -109,6 +117,8 @@ __all__ = [
     "CISPOLoss",
     "SAPOLoss",
     "GMPOLoss",
+    "MaskedCausalLMCrossEntropyLoss",
+    "TokenKLLoss",
     "KLLoss",
     "EntropyBonus",
     "LossTerm",
@@ -142,6 +152,10 @@ __all__ = [
     "make_dataset_queue_requests_fn",
     "make_dataset_sequence_requests_fn",
     "make_chat_template_step_to_item",
+    # Reference logprob annotation
+    "compute_reference_logprobs",
+    "annotate_saw_items_batch",
+    "annotate_jsonl_with_ref_logprobs",
     # Stats + loggers
     "Reducer",
     "apply_reducers_to_records",
